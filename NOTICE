@@ -1,0 +1,24 @@
+battery-local
+=============
+
+Original work (MIT). 웹 서버(app.py)·화면(ui.html)은 표준 라이브러리·자체 SVG 차트만 쓰며 제3자 코드·글꼴·데이터를 동봉하지 않습니다.
+
+계산에 쓰는 외부 소프트웨어 (동봉하지 않음 — 서버에 이미 설치된 conda 환경의 python 을 서브프로세스로 호출):
+  PyBaMM (Python Battery Mathematical Modelling) — Copyright (c) 2018, the PyBaMM team — BSD 3-Clause License
+    https://github.com/pybamm-team/PyBaMM  · 인용: Sulzer et al., J. Open Res. Softw. 9(1):14 (2021)
+    내장 파라미터 세트(Chen2020, OKane2022, ORegan2022, Mohtat2020, Ecker2015, Marquis2019, Ai2020, NCA_Kim2011,
+    Ramadass2004, Prada2013)는 PyBaMM 에 포함된 각 원 논문의 값입니다. 결과를 발표할 때는 해당 논문과 PyBaMM 을 인용하세요
+    (각 세트의 출처는 화면 '세트' 설명과 pybamm.parameter_sets.get_docstring(<이름>)).
+  pybammsolvers (IDAKLU 솔버, SUNDIALS 기반) — BSD 3-Clause License
+  CasADi — LGPL-3.0 · NumPy / SciPy — BSD 3-Clause · Matplotlib (PNG 저장, 선택) — Matplotlib License (PSF 기반)
+
+수명 외삽식 L(n) = a·√n + b·n (SEI 확산 지배 √t 성장 + 선형 항)은 일반적인 경험식으로, 특정 코드를 옮긴 것이 아닙니다.
+같은 서버의 PyBaMM_Inverse 연구 코드는 읽기만 했고 복사하지 않았습니다(열화 옵션 조합·도금 파라미터 출처 확인에 참고).
+
+Files authored for this package (MIT): app.py, worker.py, ui.html, selftest.py, setup.sh, README.md
+
+LLM (not bundled): called via an OpenAI-compatible API; default deployment is Ollama (https://github.com/ollama/ollama, MIT)
+  serving Google Gemma (gemma4:31b, https://ai.google.dev/gemma — see Gemma's terms of use).
+
+This package: Copyright (c) 2026 gggg8657 <dongjukim.dev@gmail.com>
+화면 하단·메타데이터의 저작자 표기는 지우거나 바꾸지 마세요.

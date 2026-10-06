@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>배터리 성능·수명 예측</title>
+<style>
+  :root{--bg:#f6f7f9;--fg:#1d1f23;--muted:#6b7280;--line:#dde1e6;--card:#fff;--acc:#2563eb;--acc2:#e8efff;--warn:#fff4d6;--warnf:#8a5a00;--err:#fde2e2;--errf:#b42318;--okb:#ecfdf3;--okf:#166534;--grid:#e9ecef;--axis:#9aa0a6;
+    --s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;--surface:#fcfcfb}
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121212;--fg:#ececec;--muted:#a3a3a3;--line:#33363b;--card:#1a1a19;--acc:#5b8def;--acc2:#1e2a44;--warn:#3a2f12;--warnf:#f2c46b;--err:#3b1717;--errf:#ff9b8f;--okb:#12301f;--okf:#86efac;--grid:#2a2c2f;--axis:#7d8288;
+    --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300;--surface:#1a1a19}}
+  :root[data-theme="dark"]{--bg:#121212;--fg:#ececec;--muted:#a3a3a3;--line:#33363b;--card:#1a1a19;--acc:#5b8def;--acc2:#1e2a44;--warn:#3a2f12;--warnf:#f2c46b;--err:#3b1717;--errf:#ff9b8f;--okb:#12301f;--okf:#86efac;--grid:#2a2c2f;--axis:#7d8288;
+    --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300;--surface:#1a1a19}
+  *{box-sizing:border-box}
+  body{font:14px/1.55 -apple-system,"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:var(--bg);color:var(--fg);margin:0}
+  .wrap{max-width:1360px;margin:0 auto;padding:16px}
+  header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  h1{font-size:20px;margin:0}h1 small{font-weight:400;color:var(--muted);font-size:13px;margin-left:6px}
+  .pill{font-size:12px;border-radius:99px;padding:2px 10px;background:var(--okb);color:var(--okf)}
+  .disc{background:var(--warn);color:var(--warnf);border-radius:8px;padding:7px 12px;font-size:12.5px;margin:10px 0}
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:8px 0 14px;flex-wrap:wrap}
+  .tabs button{border:none;border-bottom:2px solid transparent;border-radius:0;background:none;padding:8px 14px;cursor:pointer;color:var(--muted);font:inherit;font-weight:600}
+  .tabs button.on{color:var(--fg);border-bottom-color:var(--acc)}
+  .tabs .badge{font-size:11px;background:var(--acc);color:#fff;border-radius:99px;padding:0 6px;margin-left:4px}
+  .cols{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:16px;align-items:start}
+  @media (max-width:960px){.cols{grid-template-columns:1fr}}
+  .cols>*,.row>*,.row3>*{min-width:0}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px;min-width:0}
+  .panel h3{margin:0 0 10px;font-size:14px}
+  label{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted);margin-bottom:9px}
+  label.ck{flex-direction:row;align-items:center;gap:6px;color:var(--fg);font-size:13px}
+  label.ck.dis{color:var(--muted);opacity:.6}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  input,select,textarea,button{font:inherit;font-size:13.5px;padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--fg);min-width:0}
+  textarea{resize:vertical;min-height:70px}
+  button{cursor:pointer}button:hover{border-color:var(--axis)}button:disabled{opacity:.5;cursor:default}
+  button.primary{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:600;padding:8px 18px}
+  button.sm{font-size:12px;padding:3px 9px}
+  .seg{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}.seg button{font-size:13px;padding:4px 11px;border-radius:99px}
+  .seg button.on{background:var(--acc2);border-color:var(--acc);color:var(--acc);font-weight:600}
+  .hint{font-size:12px;color:var(--muted)}
+  .setinfo{font-size:12.5px;background:var(--bg);border-radius:8px;padding:8px 10px;margin:-2px 0 10px}
+  .setinfo b{font-weight:600}
+  .tag{display:inline-block;font-size:11px;border-radius:5px;padding:0 6px;margin:1px 2px 1px 0;background:var(--acc2);color:var(--acc)}
+  .tag.no{background:var(--grid);color:var(--muted);text-decoration:line-through}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{border-bottom:1px solid var(--line);padding:4px 6px;text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600}
+  .scn td input{width:100%;padding:3px 5px;font-size:12.5px}
+  .tblwrap{overflow-x:auto}
+  .steps{font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border-radius:6px;padding:6px 8px;margin:4px 0;white-space:pre-wrap;word-break:break-word}
+  .prog{height:8px;background:var(--grid);border-radius:99px;overflow:hidden;margin:6px 0}.prog div{height:100%;background:var(--acc);transition:width .4s}
+  .notes div{overflow-wrap:anywhere;background:var(--warn);color:var(--warnf);border-radius:6px;padding:5px 9px;margin:4px 0;font-size:12.5px}
+  .err{overflow-wrap:anywhere;background:var(--err);color:var(--errf);border-radius:6px;padding:6px 10px;margin:6px 0;font-size:13px;white-space:pre-wrap}
+  .charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:12px}
+  @media (max-width:500px){.charts{grid-template-columns:1fr}}
+  .chart{border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--surface);position:relative;min-width:0}
+  .chart h4{margin:0 0 2px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+  .chart svg{width:100%;height:auto;display:block}
+  .legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--fg);margin:2px 0 0}
+  .legend span{display:inline-flex;align-items:center;gap:5px}.legend i{display:inline-block;width:14px;height:3px;border-radius:2px}
+  .tip{position:absolute;pointer-events:none;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:11.5px;box-shadow:0 2px 8px rgba(0,0,0,.15);display:none;z-index:5;white-space:nowrap}
+  .kpis{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+  .kpi{border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-width:140px;flex:1}
+  .kpi .v{font-size:19px;font-weight:700}.kpi .l{font-size:11.5px;color:var(--muted)}
+  .kpi .x{white-space:nowrap;font-size:11px;color:var(--warnf);background:var(--warn);border-radius:4px;padding:0 5px;margin-left:4px;font-weight:600}
+  .jobs li{list-style:none;display:flex;gap:8px;align-items:center;padding:7px 4px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .jobs ul{padding:0;margin:0}
+  .jobs .t{flex:1;cursor:pointer;min-width:min(200px,100%);overflow-wrap:anywhere}.jobs .t:hover{color:var(--acc)}
+  .st{font-size:11.5px;border-radius:5px;padding:1px 7px;background:var(--grid)}
+  .st.done{background:var(--okb);color:var(--okf)}.st.running,.st.queued{background:var(--acc2);color:var(--acc)}.st.error,.st.canceled{background:var(--err);color:var(--errf)}
+  pre.stream{white-space:pre-wrap;font:12.5px/1.5 ui-monospace,Menlo,monospace;background:var(--bg);border:1px dashed var(--line);border-radius:8px;padding:10px;margin:6px 0;max-height:220px;overflow:auto;overflow-wrap:anywhere}
+  .explain{overflow-wrap:anywhere;white-space:pre-wrap;line-height:1.7;background:var(--bg);border-radius:8px;padding:10px 12px;margin:8px 0}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.chips button{font-size:12.5px;border-radius:99px;padding:3px 10px}
+  .dl{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+  .dl a{overflow-wrap:anywhere;font-size:12.5px;border:1px solid var(--line);border-radius:7px;padding:3px 10px;text-decoration:none;color:var(--fg)}
+  .dl a:hover{border-color:var(--acc)}
+  .empty{color:var(--muted);text-align:center;padding:40px 10px}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>배터리 <small>PyBaMM 기반 리튬이온 셀 성능·수명(열화) 예측</small></h1>
+  <span class="pill" id="envinfo">불러오는 중…</span>
+  <span class="hint" id="queueinfo"></span>
+</header>
+<div class="disc" id="disc">물리 모델(PyBaMM) 기반 시뮬레이션입니다. 파라미터 세트의 셀과 실제 셀이 다르면 정량값은 달라집니다 — 보정(파라미터 추정)이 필요합니다.</div>
+<div class="tabs" id="tabs">
+  <button data-t="perf" class="on">성능 시뮬레이션</button><button data-t="life">수명 예측</button><button data-t="ask">AI 질문</button><button data-t="jobs">작업·이력 <span class="badge hide" id="runbadge"></span></button>
+</div>
+
+<div class="cols">
+<div>
+  <div class="panel" id="cellpanel">
+    <h3>셀</h3>
+    <label>파라미터 세트<select id="set"></select></label>
+    <div class="setinfo" id="setinfo"></div>
+    <label>모델<select id="model"></select></label>
+    <div class="hint" id="modelinfo" style="margin:-4px 0 10px"></div>
+    <div class="row">
+      <label>주변 온도 (°C)<input id="temp" type="number" value="25" min="-20" max="60" step="1"></label>
+      <label id="thermwrap">열 모델<select id="thermal"><option value="lumped">집중(lumped) — 발열 반영</option><option value="isothermal">등온</option></select></label>
+    </div>
+    <label id="hwrap">열전달계수 W/m²K (비우면 세트값)<input id="h" type="number" min="0.1" step="1" placeholder="세트값"></label>
+  </div>
+
+  <!-- 성능 -->
+  <div class="panel" id="f-perf">
+    <h3>성능 시뮬레이션</h3>
+    <div class="seg" id="perfmode"><button data-m="rate" class="on">방전 C-rate 비교</button><button data-m="charge">CC-CV 충전</button><button data-m="drive">전류 프로파일</button></div>
+    <div id="pm-rate">
+      <label>방전 C-rate (쉼표로, 최대 6개)<input id="rates" value="0.2, 0.5, 1, 2"></label>
+      <div class="hint">만충(SOC 100%)에서 하한 전압까지 정전류 방전 → 전압-용량·온도·SOC, 용량·에너지 비교</div>
+    </div>
+    <div id="pm-charge" class="hide">
+      <label>충전 C-rate (쉼표로)<input id="crates" value="0.5, 1, 2"></label>
+      <div class="row"><label>CV 종료 전류 (C)<input id="cvcut" type="number" value="0.05" step="0.01" min="0.005" max="0.5"></label>
+      <label>시작 SOC (%)<input id="csoc0" type="number" value="0" min="0" max="90"></label></div>
+      <div class="hint">CC 로 상한 전압까지 → 상한 전압 유지(CV)하며 전류가 종료값까지 줄면 끝. 80% 도달 시간·전체 충전 시간</div>
+    </div>
+    <div id="pm-drive" class="hide">
+      <label>CSV 파일 (열: 시간[s], 전류 — 양수 방전/음수 충전)<input id="csv" type="file" accept=".csv,.txt"></label>
+      <div class="row"><label>전류 단위<select id="unit"><option value="A">A (암페어)</option><option value="C">C-rate</option></select></label>
+      <label>시작 SOC (%)<input id="dsoc0" type="number" value="100" min="5" max="100"></label></div>
+      <div class="row"><label>반복 횟수<input id="repeat" type="number" value="1" min="1" max="200"></label>
+      <label>&nbsp;<button class="sm" id="sample">예시 프로파일 만들기</button></label></div>
+      <div class="hint" id="profinfo">첫 줄이 머리글이면 건너뜁니다. 쉼표·탭·공백 구분.</div>
+    </div>
+    <div style="margin-top:10px"><button class="primary" id="runperf">계산</button></div>
+  </div>
+
+  <!-- 수명 -->
+  <div class="panel hide" id="f-life">
+    <h3>열화 서브모델</h3>
+    <div id="mechs"></div>
+    <label>SEI 성장 모델<select id="seimodel"></select></label>
+    <label class="ck"><input type="checkbox" id="arr" checked> SEI 온도 의존(Arrhenius) — 세트값이 0이면 38 kJ/mol(OKane2022 값) 적용</label>
+    <div class="row">
+      <label>SEI 속도 배율 (보정용, 기본 1)<input id="seiscale" type="number" value="1" min="0.01" max="1000" step="0.1"></label>
+      <label>EOL 기준 SOH (%)<input id="eol" type="number" value="80" min="50" max="99"></label>
+    </div>
+    <label>최대 사이클 (단계: 50 → 200 → 500 → … 까지, SOH 기준 도달 시 멈춤)<input id="maxcyc" type="number" value="1000" min="1" step="50"></label>
+    <h3 style="margin-top:6px">시나리오 (1~4개 · 한 그래프에 비교)</h3>
+    <div class="tblwrap"><table class="scn"><thead><tr><th>이름</th><th>온도°C</th><th>충전C</th><th>방전C</th><th>DoD%</th><th></th></tr></thead><tbody id="scn"></tbody></table></div>
+    <div style="display:flex;gap:6px;margin:6px 0;flex-wrap:wrap"><button class="sm" id="addscn">+ 시나리오</button>
+      <button class="sm" data-preset="crate">충전 C-rate 비교</button><button class="sm" data-preset="temp">온도 비교</button><button class="sm" data-preset="dod">DoD 비교</button></div>
+    <details><summary class="hint" style="cursor:pointer">실험 단계 직접 입력 (PyBaMM 문법, 한 줄에 한 단계 — 시나리오 1 대신 사용)</summary>
+      <textarea id="custom" placeholder="Discharge at 1C until 2.5V&#10;Rest for 5 minutes&#10;Charge at 0.3C until 4.2V&#10;Hold at 4.2V until C/100"></textarea></details>
+    <div class="hint" style="margin:6px 0">한 사이클 실험 문자열 (CV 종료 C/20, 휴지 5분):</div>
+    <div id="preview"></div>
+    <div style="margin-top:10px"><button class="primary" id="runlife">수명 예측 실행</button></div>
+  </div>
+
+  <!-- AI -->
+  <div class="panel hide" id="f-ask">
+    <h3>자연어로 묻기</h3>
+    <textarea id="question" rows="4" placeholder="예: 45도에서 2C 급속충전하면 수명이 얼마나 줄어?"></textarea>
+    <div class="chips" id="examples"></div>
+    <label>LLM 모델<select id="llm"></select></label>
+    <div><button class="primary" id="ask">설정 만들고 계산</button></div>
+    <div class="hint" style="margin-top:8px">로컬 LLM 이 질문을 실험 설정(JSON)으로 바꾸고, PyBaMM 이 계산한 뒤, 계산된 수치만으로 해설합니다. 해설에 결과에 없는 숫자가 나오면 경고합니다. LLM 은 숫자를 계산하지 않습니다.</div>
+    <pre class="stream hide" id="askstream"></pre>
+    <div id="askplan"></div>
+  </div>
+</div>
+
+<div>
+  <div class="panel hide" id="jobspanel">
+    <h3>작업·이력 <span class="hint">(긴 계산은 백그라운드 — 창을 닫아도 계속됩니다)</span></h3>
+    <div class="jobs"><ul id="joblist"></ul></div>
+  </div>
+  <div class="panel" id="result"><div class="empty">왼쪽에서 셀과 조건을 고르고 계산하세요.<br><span class="hint">결과 그래프·표·CSV/PNG/SVG 다운로드가 여기에 나옵니다.</span></div></div>
+</div>
+</div>
+</div>
+<div class="tip" id="tip"></div>
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let META=null, CUR=null, POLL=null, PROFILE=null, TAB='perf', PMODE='rate';
+const SERIES=['--s1','--s2','--s3','--s4','--s5','--s6'];
+const col=i=>getComputedStyle(document.documentElement).getPropertyValue(SERIES[i%SERIES.length]).trim();
+const cssv=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt=(x,d=3)=>x==null||x===''?'–':(typeof x==='number'?(Math.abs(x)>=1000?Math.round(x).toLocaleString():+x.toPrecision(d)):x);
+async function api(p,body){const r=await fetch(p,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j}
+async function sse(p,body,on){const r=await fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const rd=r.body.getReader(),dec=new TextDecoder();let buf='',done=null;
+  while(true){const {value,done:d}=await rd.read();if(d)break;buf+=dec.decode(value,{stream:true});let k;
+    while((k=buf.indexOf('\n\n'))>=0){const line=buf.slice(0,k);buf=buf.slice(k+2);if(!line.startsWith('data:'))continue;const ev=JSON.parse(line.slice(5));
+      if(ev.error)throw new Error(ev.error);if(ev.done)done=ev.done;else on(ev)}}
+  return done}
+
+// ── 차트 (자체 SVG, 외부 라이브러리 없음) ──
+function niceTicks(lo,hi,n=5){if(!(hi>lo))hi=lo+1;const raw=(hi-lo)/n,mag=10**Math.floor(Math.log10(raw)),e=raw/mag;
+  const st=(e<1.5?1:e<3?2:e<7?5:10)*mag,a=Math.floor(lo/st)*st,b=Math.ceil(hi/st)*st,t=[];for(let v=a;v<=b+st*1e-9;v+=st)t.push(+v.toPrecision(12));return t}
+function lineChart(box,o){
+  // o: {title, xlabel, ylabel, series:[{name,x,y,dash,ci,faint}], hline, ylim}
+  const W=560,H=300,m={l:54,r:14,t:10,b:40};
+  const all=o.series.filter(s=>s.x&&s.x.length);let xs=[],ys=[];all.forEach(s=>{s.x.forEach((v,i)=>{if(v!=null&&s.y[i]!=null){xs.push(v);ys.push(s.y[i])}})});
+  if(o.hline!=null)ys.push(o.hline);
+  if(!xs.length){box.innerHTML='';return}
+  let x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);if(o.ylim){y0=o.ylim[0]??y0;y1=o.ylim[1]??y1}
+  const pad=(y1-y0)*.05||Math.abs(y0)*.05||1;y0-=pad;y1+=pad;
+  const xt=niceTicks(x0,x1,6),yt=niceTicks(y0,y1,5);x0=Math.min(x0,xt[0]);x1=Math.max(x1,xt[xt.length-1]);y0=yt[0];y1=yt[yt.length-1];
+  const X=v=>m.l+(v-x0)/(x1-x0||1)*(W-m.l-m.r),Y=v=>H-m.b-(v-y0)/(y1-y0||1)*(H-m.t-m.b);
+  let g='';
+  yt.forEach(v=>{g+=`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${cssv('--grid')}"/><text x="${m.l-6}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="${cssv('--muted')}">${fmt(v,4)}</text>`});
+  xt.forEach(v=>{if(v<x0-1e-9||v>x1+1e-9)return;g+=`<line x1="${X(v)}" x2="${X(v)}" y1="${H-m.b}" y2="${H-m.b+4}" stroke="${cssv('--axis')}"/><text x="${X(v)}" y="${H-m.b+16}" text-anchor="middle" font-size="11" fill="${cssv('--muted')}">${fmt(v,4)}</text>`});
+  g+=`<line x1="${m.l}" x2="${W-m.r}" y1="${H-m.b}" y2="${H-m.b}" stroke="${cssv('--axis')}"/>`;
+  g+=`<text x="${(m.l+W-m.r)/2}" y="${H-6}" text-anchor="middle" font-size="12" fill="${cssv('--muted')}">${esc(o.xlabel)}</text>`;
+  g+=`<text transform="translate(16,${(m.t+H-m.b)/2}) rotate(-90)" text-anchor="middle" font-size="12" fill="${cssv('--muted')}">${esc(o.ylabel)}</text>`;
+  if(o.hline!=null)g+=`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(o.hline)}" y2="${Y(o.hline)}" stroke="${cssv('--axis')}" stroke-dasharray="5 4"/><text x="${W-m.r-4}" y="${Y(o.hline)-5}" text-anchor="end" font-size="11" fill="${cssv('--muted')}">${esc(o.hlabel||'')}</text>`;
+  all.forEach(s=>{let d='',pen=false;s.x.forEach((v,i)=>{const y=s.y[i];if(v==null||y==null||!isFinite(y)){pen=false;return}d+=(pen?'L':'M')+X(v).toFixed(1)+' '+Y(y).toFixed(1);pen=true});
+    g+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${s.dash?'stroke-dasharray="6 5"':''} ${s.faint?'opacity=".45"':''}/>`});
+  g+=`<line id="xh" y1="${m.t}" y2="${H-m.b}" stroke="${cssv('--axis')}" opacity="0"/>`;
+  const leg=o.series.filter(s=>!s.nolegend).map(s=>`<span><i style="background:${s.color};${s.dash?'background:repeating-linear-gradient(90deg,'+s.color+' 0 5px,transparent 5px 8px)':''}"></i>${esc(s.name)}</span>`).join('');
+  box.innerHTML=`<h4><span>${esc(o.title)}</span><button class="sm svgdl" title="SVG 로 저장">SVG</button></h4><svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif"><rect width="${W}" height="${H}" fill="${cssv('--surface')}"/>${g}<rect class="hit" x="${m.l}" y="${m.t}" width="${W-m.l-m.r}" height="${H-m.t-m.b}" fill="transparent"/></svg>${o.series.filter(s=>!s.nolegend).length>1?`<div class="legend">${leg}</div>`:''}`;
+  const svg=box.querySelector('svg'),hit=svg.querySelector('.hit'),xh=svg.querySelector('#xh'),tip=$('#tip');
+  hit.addEventListener('mousemove',ev=>{const r=svg.getBoundingClientRect(),px=(ev.clientX-r.left)/r.width*W,xv=x0+(px-m.l)/(W-m.l-m.r)*(x1-x0);
+    xh.setAttribute('x1',px);xh.setAttribute('x2',px);xh.setAttribute('opacity','1');
+    let rows=all.filter(s=>!s.nolegend||s.tipname).map(s=>{let bi=-1,bd=1e99;s.x.forEach((v,i)=>{if(v==null||s.y[i]==null)return;const d=Math.abs(v-xv);if(d<bd){bd=d;bi=i}});
+      if(bi<0)return '';return `<div><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${s.color};margin-right:5px"></i>${esc(s.tipname||s.name)}: <b>${fmt(s.y[bi],4)}</b> <span style="color:${cssv('--muted')}">@ ${fmt(s.x[bi],4)}</span></div>`}).join('');
+    tip.innerHTML=`<div style="color:${cssv('--muted')}">${esc(o.xlabel)} ≈ ${fmt(xv,4)}</div>${rows}`;tip.style.display='block';
+    tip.style.left=Math.min(ev.pageX+14,window.scrollX+innerWidth-tip.offsetWidth-10)+'px';tip.style.top=(ev.pageY+12)+'px'});
+  hit.addEventListener('mouseleave',()=>{tip.style.display='none';xh.setAttribute('opacity','0')});
+  box.querySelector('.svgdl').onclick=()=>{const s=new XMLSerializer().serializeToString(svg);const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([s],{type:'image/svg+xml'}));a.download=(o.title||'chart').replace(/[^\w가-힣-]+/g,'_')+'.svg';a.click()};
+}
+function chartBox(parent){const d=document.createElement('div');d.className='chart';parent.appendChild(d);return d}
+
+// ── 메타·셀 패널 ──
+function curSet(){return META.sets.find(s=>s.name===$('#set').value)}
+function renderSet(){const s=curSet();const mk=(k,l)=>`<span class="tag ${s.caps[k]?'':'no'}">${l}</span>`;
+  $('#setinfo').innerHTML=`<b>${esc(s.cell)}</b> · ${esc(s.chem)}<br>공칭 ${fmt(s.capacity)} Ah · ${s.vmin}–${s.vmax} V ${s.note?'<br>'+esc(s.note):''}<br>`+
+    mk('thermal','열 모델')+mk('sei','SEI')+mk('plating','리튬 도금')+mk('lam','LAM(응력)')+(s.sei_ea===0?'<span class="hint"> SEI 활성화에너지 0</span>':'');
+  $('#thermwrap').classList.toggle('hide',!s.caps.thermal);$('#hwrap').classList.toggle('hide',!s.caps.thermal);
+  $('#mechs').innerHTML=Object.entries(META.mech_label).map(([k,l])=>`<label class="ck ${s.caps[k]?'':'dis'}"><input type="checkbox" value="${k}" ${s.caps[k]?'checked':'disabled'}> ${esc(l)}${s.caps[k]?'':' — 이 세트에 파라미터 없음'}</label>`).join('')||'';
+  if(!s.caps.sei)$('#mechs').innerHTML+=`<div class="notes"><div>이 세트는 열화(SEI) 파라미터가 없어 수명 예측을 할 수 없습니다. OKane2022 를 권장합니다.</div></div>`;
+  $('#seimodel').innerHTML=s.sei_models.map(m=>`<option value="${esc(m)}">${esc(META.sei_label[m]||m)} (${esc(m)})</option>`).join('');
+  $$('#mechs input').forEach(i=>i.onchange=preview);preview()}
+async function loadMeta(){
+  try{META=await api('api/meta')}catch(e){$('#envinfo').textContent='PyBaMM 오류';$('#result').innerHTML=`<div class="err">${esc(e.message)}</div>`;return}
+  $('#envinfo').textContent=`PyBaMM ${META.pybamm} · Python ${META.python}`;$('#disc').textContent=META.disclaimer;
+  $('#set').innerHTML=META.sets.map(s=>`<option value="${s.name}">${s.name} — ${esc(s.chem)}</option>`).join('');
+  $('#model').innerHTML=Object.keys(META.models).map(m=>`<option>${m}</option>`).join('');$('#model').value='SPMe';
+  $('#maxcyc').max=META.max_cycles;
+  $('#set').value='Chen2020';renderSet();modelInfo();
+  api('api/models').then(ms=>{$('#llm').innerHTML=(ms.length?ms:[META.llm_model]).map(m=>`<option ${m===META.llm_model?'selected':''}>${esc(m)}</option>`).join('')});
+}
+function modelInfo(){$('#modelinfo').textContent=META.models[$('#model').value]}
+$('#set').onchange=renderSet;$('#model').onchange=modelInfo;
+function cell(){const j={set:$('#set').value,model:$('#model').value,temp_C:+$('#temp').value,thermal:$('#thermal').value};if($('#h').value)j.h=+$('#h').value;return j}
+
+// ── 탭 ──
+$$('#tabs button').forEach(b=>b.onclick=()=>{TAB=b.dataset.t;$$('#tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  $('#f-perf').classList.toggle('hide',TAB!=='perf');$('#f-life').classList.toggle('hide',TAB!=='life');$('#f-ask').classList.toggle('hide',TAB!=='ask');
+  $('#jobspanel').classList.toggle('hide',TAB!=='jobs');$('#cellpanel').classList.toggle('hide',TAB==='ask'||TAB==='jobs');
+  if(TAB==='jobs'){$('#cellpanel').parentElement.classList.add('hide')}else $('#cellpanel').parentElement.classList.remove('hide');
+  if(TAB==='life'&&curSet()&&!curSet().caps.sei&&META.sets.find(s=>s.name==='OKane2022')){$('#set').value='OKane2022';renderSet()}
+  if(TAB==='life'&&$('#model').value==='SPMe'&&!b.dataset.seen){$('#model').value='SPM';modelInfo()}b.dataset.seen=1;
+  if(TAB==='jobs')loadJobs()});
+$$('#perfmode button').forEach(b=>b.onclick=()=>{PMODE=b.dataset.m;$$('#perfmode button').forEach(x=>x.classList.toggle('on',x===b));['rate','charge','drive'].forEach(m=>$('#pm-'+m).classList.toggle('hide',m!==PMODE))});
+
+// ── 성능 실행 ──
+function parseCSV(txt){const rows=[];txt.split(/\r?\n/).forEach(l=>{const p=l.trim().split(/[,;\t ]+/);if(p.length<2)return;const a=+p[0],b=+p[1];if(isFinite(a)&&isFinite(b)&&p[0]!=='')rows.push([a,b])});return rows}
+$('#csv').onchange=async e=>{const f=e.target.files[0];if(!f)return;PROFILE=parseCSV(await f.text());
+  $('#profinfo').textContent=PROFILE.length?`${PROFILE.length}점 · ${fmt(PROFILE[PROFILE.length-1][0]-PROFILE[0][0])} s · 전류 ${fmt(Math.min(...PROFILE.map(r=>r[1])))}~${fmt(Math.max(...PROFILE.map(r=>r[1])))}`:'읽을 수 있는 숫자 행이 없습니다'};
+$('#sample').onclick=e=>{e.preventDefault();const cap=curSet().capacity;PROFILE=[];
+  for(let t=0;t<=1800;t+=2){const ph=Math.floor(t/30)%6;const c=[1.5,0.5,-0.6,1.0,0,2.0][ph];PROFILE.push([t,+(c*(1+0.15*Math.sin(t/7))).toFixed(3)])}
+  $('#unit').value='C';$('#profinfo').textContent=`예시(합성) 프로파일: 30 s 마다 1.5C·0.5C·회생 −0.6C·1C·휴지·2C 펄스 반복, 30분 · ${PROFILE.length}점 (단위 C-rate) — 실제 주행 데이터가 아님`};
+$('#runperf').onclick=async()=>{const j={...cell(),kind:PMODE};
+  if(PMODE==='rate')j.c_rates=$('#rates').value;
+  if(PMODE==='charge'){j.c_rates=$('#crates').value;j.cv_cut_C=+$('#cvcut').value;j.soc0=+$('#csoc0').value}
+  if(PMODE==='drive'){if(!PROFILE||!PROFILE.length)return alert('CSV 를 올리거나 예시 프로파일을 만드세요');Object.assign(j,{profile:PROFILE,unit:$('#unit').value,soc0:+$('#dsoc0').value,repeat:+$('#repeat').value})}
+  submit(j)};
+async function submit(j){try{const r=await api('api/jobs',{job:j});openJob(r.id)}catch(e){showErr(e.message)}}
+function showErr(m){$('#result').innerHTML=`<div class="err">${esc(m)}</div>`}
+
+// ── 수명 시나리오 ──
+let SCN=[{label:'기준 25°C 0.5C',temp_C:25,chg_C:0.5,dis_C:1,dod:100},{label:'급속충전 2C',temp_C:25,chg_C:2,dis_C:1,dod:100}];
+function renderScn(){$('#scn').innerHTML=SCN.map((s,i)=>`<tr><td><input data-i="${i}" data-k="label" value="${esc(s.label)}" style="min-width:110px"></td>`+
+  ['temp_C','chg_C','dis_C','dod'].map(k=>`<td><input data-i="${i}" data-k="${k}" type="number" step="any" value="${s[k]}" style="width:60px"></td>`).join('')+
+  `<td><button class="sm" data-del="${i}" ${SCN.length<2?'disabled':''}>✕</button></td></tr>`).join('');
+  $$('#scn input').forEach(x=>x.oninput=()=>{const s=SCN[x.dataset.i];s[x.dataset.k]=x.dataset.k==='label'?x.value:+x.value;preview()});
+  $$('#scn [data-del]').forEach(b=>b.onclick=()=>{SCN.splice(+b.dataset.del,1);renderScn()});
+  $('#addscn').disabled=SCN.length>=4;preview()}
+$('#addscn').onclick=()=>{if(SCN.length<4){const l=SCN[SCN.length-1];SCN.push({...l,label:`시나리오 ${SCN.length+1}`});renderScn()}};
+$$('[data-preset]').forEach(b=>b.onclick=()=>{const T=+$('#temp').value||25;
+  SCN={crate:[0.3,1,2].map(c=>({label:`충전 ${c}C`,temp_C:T,chg_C:c,dis_C:1,dod:100})),
+       temp:[10,25,45].map(t=>({label:`${t}°C`,temp_C:t,chg_C:0.5,dis_C:1,dod:100})),
+       dod:[100,80,50].map(d=>({label:`DoD ${d}%`,temp_C:T,chg_C:0.5,dis_C:1,dod:d}))}[b.dataset.preset];renderScn()});
+function lifeJob(){const custom=$('#custom').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const scs=SCN.map(s=>({...s}));if(custom.length)scs[0]={label:scs[0].label||'직접 입력',temp_C:scs[0].temp_C,steps:custom};
+  return {...cell(),kind:'life',mechanisms:$$('#mechs input:checked').map(i=>i.value),sei_model:$('#seimodel').value,sei_arrhenius:$('#arr').checked,
+    sei_scale:+$('#seiscale').value||1,eol:+$('#eol').value,max_cycles:+$('#maxcyc').value,scenarios:scs}}
+let pvT=null;function preview(){clearTimeout(pvT);pvT=setTimeout(async()=>{if(!META)return;
+  try{const r=await api('api/validate',{job:lifeJob()});$('#preview').innerHTML=r.steps.map((st,i)=>`<div class="steps"><b>${esc(r.job.scenarios[i].label)}</b> (${r.job.scenarios[i].temp_C}°C)\n${esc(st.join('\n'))}</div>`).join('');$('#runlife').disabled=false}
+  catch(e){$('#preview').innerHTML=`<div class="err">${esc(e.message)}</div>`;$('#runlife').disabled=true}},250)}
+['#custom','#seiscale','#eol','#maxcyc','#temp','#seimodel','#model'].forEach(s=>$(s).addEventListener('input',preview));
+$('#runlife').onclick=()=>submit(lifeJob());
+
+// ── AI ──
+const EX=['45도에서 2C 급속충전하면 수명이 얼마나 줄어?','DoD 50%로 쓰면 100% 대비 수명이 얼마나 늘어?','10도 저온에서 1C 충전하면 리튬 도금이 얼마나 생겨?','LG M50 셀 0.2C·1C·3C 방전 용량 비교해줘','2C 충전하면 80%까지 몇 분 걸려?'];
+$('#examples').innerHTML=EX.map(e=>`<button>${esc(e)}</button>`).join('');$$('#examples button').forEach(b=>b.onclick=()=>$('#question').value=b.textContent);
+$('#ask').onclick=async()=>{const q=$('#question').value.trim();if(!q)return;$('#ask').disabled=true;const pre=$('#askstream');pre.classList.remove('hide');pre.textContent='';$('#askplan').innerHTML='';
+  try{const r=await sse('api/ask',{question:q,model:$('#llm').value},ev=>{if(ev.reset)pre.textContent='';if(ev.token)pre.textContent+=ev.token;if(ev.msg&&!ev.token)pre.textContent+=`[${ev.msg}]\n`;pre.scrollTop=1e9});
+    $('#askplan').innerHTML=`<div class="hint" style="margin-top:6px"><b>${esc(r.title)}</b><br>${esc(r.reason||'')}</div>`+(r.steps?r.steps.map((s,i)=>`<div class="steps"><b>${esc(r.job.scenarios[i].label)}</b> (${r.job.scenarios[i].temp_C}°C)\n${esc(s.join('\n'))}</div>`).join(''):'');
+    AUTOEXPLAIN.add(r.id);openJob(r.id)}catch(e){$('#askplan').innerHTML=`<div class="err">${esc(e.message)}</div>`}finally{$('#ask').disabled=false}};
+const AUTOEXPLAIN=new Set();
+
+// ── 작업 목록·결과 ──
+const STATE={queued:'대기',running:'계산 중',done:'완료',error:'오류',canceled:'취소'};
+async function loadJobs(){const r=await api('api/jobs');const n=r.jobs.filter(j=>j.state==='running'||j.state==='queued').length;
+  $('#runbadge').textContent=n;$('#runbadge').classList.toggle('hide',!n);$('#queueinfo').textContent=n?`계산 중·대기 ${n}건 (동시 ${META?META.max_jobs:2}개)`:'';
+  if(TAB==='jobs')$('#joblist').innerHTML=r.jobs.length?r.jobs.map(j=>`<li><span class="st ${j.state}">${STATE[j.state]||j.state}${j.state==='running'?' '+Math.round(j.pct||0)+'%':''}</span>
+    <span class="t" data-open="${j.id}">${esc(j.title)}${j.question?`<br><span class="hint">“${esc(j.question)}”</span>`:''}<br><span class="hint">${esc(j.created.replace('T',' '))} · ${esc(j.msg||'')}</span></span>
+    ${j.state==='running'||j.state==='queued'?`<button class="sm" data-cancel="${j.id}">취소</button>`:''}<button class="sm" data-delj="${j.id}">삭제</button></li>`).join(''):'<div class="empty">아직 작업이 없습니다</div>';
+  $$('[data-open]').forEach(x=>x.onclick=()=>openJob(x.dataset.open));
+  $$('[data-cancel]').forEach(x=>x.onclick=async()=>{await api(`api/jobs/${x.dataset.cancel}/cancel`,{});loadJobs()});
+  $$('[data-delj]').forEach(x=>x.onclick=async()=>{if(!confirm('이 작업과 결과 파일을 지울까요?'))return;await api(`api/jobs/${x.dataset.delj}/delete`,{});if(CUR===x.dataset.delj){CUR=null;$('#result').innerHTML='<div class="empty">삭제됨</div>'}loadJobs()});
+  return n}
+setInterval(()=>{loadJobs().catch(()=>{})},4000);
+let LASTSIG='';
+async function openJob(id){CUR=id;try{history.replaceState(null,'','?job='+id)}catch(e){}LASTSIG='';clearTimeout(POLL);await refresh();window.scrollTo({top:$('#result').offsetTop-10,behavior:'smooth'})}
+async function refresh(){if(!CUR)return;const id=CUR;let r;try{r=await api('api/jobs/'+id)}catch(e){return showErr(e.message)}if(id!==CUR)return;
+  const st=r.status,sig=st.state+'|'+(st.partial?st.msg:'')+'|'+(r.result?1:0)+(r.explain?1:0);
+  const live=st.state==='running'||st.state==='queued';
+  if(sig!==LASTSIG||!live){LASTSIG=sig;renderJob(r)}else{const p=$('#jobprog');if(p){p.querySelector('div').style.width=(st.pct||0)+'%';$('#jobmsg').textContent=`${st.msg||''} · ${fmt(st.elapsed||0)} s`}}
+  if(live)POLL=setTimeout(refresh,1500);
+  else if(st.state==='done'&&AUTOEXPLAIN.has(id)&&!r.explain){AUTOEXPLAIN.delete(id);doExplain(id)}}
+function renderJob(r){const st=r.status,res=r.result||r.partial,el=$('#result');
+  let h=`<h3>${esc(st.title)}</h3>`;if(st.question)h+=`<div class="hint">질문: “${esc(st.question)}”</div>`;
+  if(st.state==='running'||st.state==='queued')h+=`<div class="prog" id="jobprog"><div style="width:${st.pct||0}%"></div></div><div class="hint"><span id="jobmsg">${esc(st.msg||'')}</span> <button class="sm" onclick="api('api/jobs/${st.id}/cancel',{}).then(refresh)">취소</button></div>`;
+  if(st.state==='error'||st.state==='canceled')h+=`<div class="err">${esc(st.msg)}</div>`;
+  if(r.partial&&!r.result)h+=`<div class="notes"><div>단계 결과(계산 중) — 사이클을 더 돌리는 중입니다. 최종 결과가 아닙니다.</div></div>`;
+  h+=`<div id="body"></div>`;el.innerHTML=h;
+  if(res){const b=$('#body');if(res.kind==='life')renderLife(b,res,r);else renderPerf(b,res,r)}
+  if(r.result){$('#body').insertAdjacentHTML('beforeend',`<div class="dl">${(r.result.files||[]).map(f=>`<a href="api/jobs/${st.id}/file/${f}">⬇ ${f}</a>`).join('')}<a href="api/jobs/${st.id}/file/result.json">⬇ result.json</a></div>
+    <div><button class="sm" id="explainbtn">AI 해설 ${r.explain?'다시 ':''}만들기</button> <span class="hint">계산된 수치만 근거로 로컬 LLM 이 해설</span></div><div id="explainbox"></div>`);
+    $('#explainbtn').onclick=()=>doExplain(st.id);if(r.explain)showExplain(r.explain)}
+  $('#body')&&$('#body').insertAdjacentHTML('beforeend',`<div class="disc">${esc(r.disclaimer)}</div><div class="hint">계산 ${fmt(res?res.sec:st.elapsed)} s · ${res&&res.pybamm?'PyBaMM '+res.pybamm:''} · 작업 ${st.id}</div>`)}
+function notesHTML(arr){return arr&&arr.length?`<div class="notes">${arr.map(n=>`<div>${esc(n)}</div>`).join('')}</div>`:''}
+function renderPerf(b,res){const runs=res.runs,k=res.kind;
+  const cols={rate:[['capacity_Ah','용량 Ah'],['capacity_pct','공칭 대비 %'],['energy_Wh','에너지 Wh'],['avg_V','평균 V'],['duration_min','시간 분'],['T_max_C','최고 °C'],['T_rise_C','상승 °C']],
+    charge:[['charged_Ah','충전 Ah'],['energy_in_Wh','투입 Wh'],['t80_min','80% 도달 분'],['t_cc_min','CC 구간 분'],['t_total_min','전체 분'],['T_max_C','최고 °C']],
+    drive:[['duration_min','진행 분'],['completed','완주'],['V_min','최저 V'],['V_max','최고 V'],['soc_end_pct','끝 SOC %'],['net_Ah','순방전 Ah'],['net_energy_Wh','순에너지 Wh'],['T_max_C','최고 °C']]}[k];
+  b.innerHTML=`<div class="hint">${esc(res.set)} · ${esc(res.model)} · ${res.temp_C}°C · ${res.thermal==='lumped'?'집중 열 모델':'등온'} · 공칭 ${fmt(res.cap_nom)} Ah</div>`+notesHTML(res.notes)+
+    `<div class="tblwrap"><table><tr><th>조건</th>${cols.map(c=>`<th>${c[1]}</th>`).join('')}</tr>${runs.map((r,i)=>`<tr><td><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${col(i)};margin-right:5px"></i>${esc(r.metrics.label)}</td>${cols.map(c=>`<td>${c[0]==='completed'?(r.metrics[c[0]]?'예':'아니오'):fmt(r.metrics[c[0]],4)}</td>`).join('')}</tr>`).join('')}</table></div><div class="charts" id="charts" style="margin-top:10px"></div>`;
+  const C=$('#charts'),S=(x,y)=>runs.map((r,i)=>({name:r.metrics.label,x:r.series[x],y:r.series[y],color:col(i)}));
+  if(k==='rate')lineChart(chartBox(C),{title:'전압 – 방전 용량',xlabel:'방전 용량 (Ah)',ylabel:'전압 (V)',series:S('q_Ah','V')});
+  else lineChart(chartBox(C),{title:'전압',xlabel:'시간 (분)',ylabel:'전압 (V)',series:S('t_min','V')});
+  if(k!=='rate')lineChart(chartBox(C),{title:'전류',xlabel:'시간 (분)',ylabel:'전류 (A, +방전)',series:S('t_min','I_A')});
+  if(runs[0].series.T_C)lineChart(chartBox(C),{title:'셀 온도',xlabel:'시간 (분)',ylabel:'온도 (°C)',series:S('t_min','T_C')});
+  lineChart(chartBox(C),{title:'SOC',xlabel:'시간 (분)',ylabel:'SOC (%)',series:S('t_min','soc')})}
+function renderLife(b,res,r){const scs=res.scenarios||[];if(!scs.length){b.innerHTML='<div class="hint">첫 단계 계산 중…</div>';return}
+  const thr=(scs[0].eol||{}).threshold_pct||80;
+  let h=`<div class="hint">${esc(r.job.set)} · ${esc(r.job.model)} · 열화: ${(r.job.mechanisms||[]).map(m=>esc(META.mech_label[m]||m)).join(', ')} · SEI 모델: ${esc(META.sei_label[r.job.sei_model]||r.job.sei_model)}${r.job.sei_scale!=1?' · SEI 속도 ×'+r.job.sei_scale:''}</div>`;
+  h+=`<div class="kpis">${scs.map((s,i)=>{const e=s.eol||{},f=s.final||{};const v=e.simulated?Math.round(e.simulated):e.extrapolated?Math.round(e.extrapolated):null;
+    return `<div class="kpi" style="border-left:4px solid ${col(i)}"><div class="l">${esc(s.label)} · EOL(SOH ${thr}%)</div><div class="v">${v!=null?v.toLocaleString()+' 사이클':'–'}${e.simulated?'':v!=null?'<span class="x">외삽</span>':''}</div>
+    ${e.simulated_dis&&!e.simulated?`<div class="l">사이클링 전류 방전 용량 기준으로는 ${Math.round(e.simulated_dis).toLocaleString()} 사이클에 도달</div>`:''}<div class="l">${s.cycles_done} 사이클 계산 · SOH ${fmt(f.soh,4)}% · 100사이클당 −${fmt(f.fade_per_100,3)}%p${e.extrap_ratio?' · 계산 범위의 '+fmt(e.extrap_ratio,3)+'배 외삽':''}</div></div>`}).join('')}</div>`;
+  h+=notesHTML([...new Set(scs.flatMap(s=>[...(s.notes||[]).map(n=>s.label+': '+n),...(s.stop_reason&&!/도달/.test(s.stop_reason)?[s.label+': '+s.stop_reason]:[])]))]);
+  h+=`<div class="tblwrap"><table><tr><th>시나리오</th><th>°C</th><th>사이클</th><th>SOH %</th><th>EOL</th><th>LLI %</th><th>LAM 음극 %</th><th>LAM 양극 %</th><th>SEI Ah</th><th>도금 Ah</th><th>균열 SEI Ah</th><th>주된 열화</th></tr>`+
+    scs.map((s,i)=>{const f=s.final||{},e=s.eol||{};return `<tr><td><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${col(i)};margin-right:5px"></i>${esc(s.label)}</td><td>${s.temp_C}</td><td>${s.cycles_done}</td><td>${fmt(f.soh,4)}</td>
+    <td>${e.simulated?Math.round(e.simulated):e.extrapolated?Math.round(e.extrapolated)+' (외삽)':'–'}</td><td>${fmt(f.LLI_pct,3)}</td><td>${fmt(f.LAM_ne_pct,3)}</td><td>${fmt(f.LAM_pe_pct,3)}</td><td>${fmt(f.Q_SEI_Ah,3)}</td><td>${fmt(f.Q_plating_Ah,3)}</td><td>${fmt(f.Q_SEI_cracks_Ah,3)}</td><td>${esc(f.dominant||'–')}</td></tr>`}).join('')+`</table></div>`;
+  h+=`<details style="margin:6px 0"><summary class="hint" style="cursor:pointer">시나리오별 한 사이클 실험 문자열</summary>${scs.map(s=>`<div class="steps"><b>${esc(s.label)}</b>\n${esc(s.steps.join('\n'))}</div>`).join('')}</details>`;
+  h+=`<label class="ck"><input type="checkbox" id="showfit" checked> 외삽 곡선(점선) 보기</label><div class="charts" id="charts"></div>`;b.innerHTML=h;
+  const draw=()=>{const C=$('#charts');C.innerHTML='';const fit=$('#showfit').checked;
+    const soh=[];scs.forEach((s,i)=>{soh.push({name:s.label,x:s.rows.map(r=>r.cycle),y:s.rows.map(r=>r.soh),color:col(i)});
+      if(fit&&s.eol&&s.eol.fit_curve)soh.push({name:s.label+' 외삽',x:s.eol.fit_curve.map(p=>p[0]),y:s.eol.fit_curve.map(p=>p[1]),color:col(i),dash:true,nolegend:true,tipname:s.label+' (외삽)'})});
+    lineChart(chartBox(C),{title:'용량 유지율(SOH) — 저율(평형) 용량 기준',xlabel:'사이클',ylabel:'SOH (%)',series:soh,hline:thr,hlabel:`EOL ${thr}%`});
+    if(scs[0].rows[0]&&scs[0].rows[0].soh_dis!=null)lineChart(chartBox(C),{title:'사이클 방전 용량 유지율 (사이클링 전류 기준)',xlabel:'사이클',ylabel:'방전 용량 / 1 사이클 (%)',
+      series:scs.filter(s=>s.rows[0]&&s.rows[0].soh_dis!=null).map((s,i)=>({name:s.label,x:s.rows.map(r=>r.cycle),y:s.rows.map(r=>r.soh_dis),color:col(scs.indexOf(s))}))});
+    const mech=[];scs.forEach((s,i)=>{const n=s.rows.map(r=>r.cycle);mech.push({name:s.label+' LLI',x:n,y:s.rows.map(r=>r.LLI_pct),color:col(i)});
+      mech.push({name:s.label+' LAM 음극',x:n,y:s.rows.map(r=>r.LAM_ne_pct),color:col(i),dash:true});mech.push({name:s.label+' LAM 양극',x:n,y:s.rows.map(r=>r.LAM_pe_pct),color:col(i),faint:true})});
+    lineChart(chartBox(C),{title:'열화 모드 — 리튬 손실(LLI, 실선) · 활물질 손실 LAM(음극 점선/양극 흐림)',xlabel:'사이클',ylabel:'손실 (%)',series:mech});
+    const cap=[];scs.forEach((s,i)=>{const n=s.rows.map(r=>r.cycle);cap.push({name:s.label+' SEI',x:n,y:s.rows.map(r=>r.Q_SEI_Ah),color:col(i)});
+      if(s.rows.some(r=>r.Q_plating_Ah))cap.push({name:s.label+' 도금',x:n,y:s.rows.map(r=>r.Q_plating_Ah),color:col(i),dash:true});
+      if(s.rows.some(r=>r.Q_SEI_cracks_Ah))cap.push({name:s.label+' 균열 SEI',x:n,y:s.rows.map(r=>r.Q_SEI_cracks_Ah),color:col(i),faint:true})});
+    lineChart(chartBox(C),{title:'부반응으로 잃은 리튬(용량 환산) — SEI 실선 · 도금 점선 · 균열면 SEI 흐림',xlabel:'사이클',ylabel:'Ah',series:cap});
+    const cv=[];scs.forEach((s,i)=>s.curves.filter(c=>c.q_Ah).forEach((c,j,a)=>cv.push({name:s.label,tipname:`${s.label} ${c.cycle}회`,nolegend:j<a.length-1,x:c.q_Ah,y:c.V,color:col(i),faint:j<a.length-1,dash:j===0&&a.length>1})));
+    lineChart(chartBox(C),{title:'방전 곡선 변화 (점선 1회차 · 흐림 중간 단계 · 실선 마지막)',xlabel:'방전 용량 (Ah)',ylabel:'전압 (V)',series:cv})};
+  draw();$('#showfit').onchange=draw}
+async function doExplain(id){const box=$('#explainbox');if(!box||CUR!==id)return;box.innerHTML='<pre class="stream" id="exs"></pre>';const pre=$('#exs');
+  try{const r=await sse(`api/jobs/${id}/explain`,{model:$('#llm').value},ev=>{if(ev.token){pre.textContent+=ev.token;pre.scrollTop=1e9}else if(ev.msg)pre.textContent+=`[${ev.msg}]\n`});showExplain(r)}
+  catch(e){box.innerHTML=`<div class="err">${esc(e.message)}</div>`}}
+function showExplain(x){const box=$('#explainbox');if(!box)return;box.innerHTML=`<div class="explain">${esc(x.text)}</div>`+
+  (x.unverified_numbers&&x.unverified_numbers.length?`<div class="notes"><div>⚠ 해설에 계산 결과에 없는 숫자가 있습니다: ${x.unverified_numbers.map(esc).join(', ')} — 표의 값을 기준으로 보세요.</div></div>`:'')+
+  `<div class="hint">${esc(x.model)} · ${esc(x.ts)} · 해설 근거 수치는 위 표·그래프와 result.json</div>`}
+
+loadMeta().then(()=>{renderScn();loadJobs();const q=new URLSearchParams(location.search);
+  if(q.get('tab'))$(`#tabs [data-t="${q.get('tab')}"]`)?.click();if(q.get('job'))openJob(q.get('job'))});
+</script>
+</body>
+</html>
