@@ -1,9 +1,42 @@
 # battery-local — PyBaMM 배터리 성능·수명(열화) 예측
 
-> **한 줄 요약** — PyBaMM 내장 파라미터 세트(LG M50·Kokam·A123 LFP 등)로 정전류 방전 C-rate 비교, CC-CV 충전, 사용자 전류 프로파일을 계산하고,
-> SEI 성장·리튬 도금·활물질 손실(입자 균열) 서브모델을 켠 사이클 실험으로 **용량 유지율(SOH) 곡선·EOL 사이클·LLI/LAM 기여**를 예측합니다.
-> 충전 C-rate·온도·DoD 를 바꾼 2~4개 시나리오를 한 그래프에 비교하고, 로컬 LLM 으로 자연어 질문 → 실험 설정 → 계산 → **계산 수치만 근거로 한 해설**까지.
-> 웹 서버는 표준 라이브러리만, 계산은 서버의 PyBaMM conda 환경을 서브프로세스로 호출(복사·수정 없음). CDN 없음, 외부 전송 없음.
+PyBaMM 물리 모델로 리튬이온 셀의 방전·충전 성능과 사이클 수명(SOH·EOL·LLI/LAM)을 계산하는 로컬 웹 도구입니다. 포트 `8785`.
+
+![방전 C-rate 비교 결과 — ① 요약 표 ② 전압·온도·SOC 차트](docs/img/result.png)
+
+## 무엇을 하나
+
+- PyBaMM 내장 파라미터 세트(LG M50·Kokam·A123 LFP 등)와 SPM / SPMe / DFN 모델로 **정전류 방전 C-rate 비교, CC-CV 충전, 사용자 전류 프로파일**을 계산합니다. 집중(lumped) 열 모델을 켜면 발열에 따른 셀 온도도 나옵니다.
+- SEI 성장·리튬 도금·활물질 손실(입자 균열) 서브모델을 켠 사이클 실험으로 **용량 유지율(SOH) 곡선·EOL 사이클·LLI/LAM 기여**를 예측하고, 충전 C-rate·온도·DoD 를 바꾼 2~4개 시나리오를 한 그래프에 비교합니다.
+- 로컬 LLM(포털 기본: Ollama `gemma4:31b`)은 자연어 질문 → 실험 설정(JSON) 변환과 **계산 수치만 근거로 한 해설**에만 씁니다. 숫자는 전부 PyBaMM 이 계산합니다.
+- 웹 서버는 표준 라이브러리만, 계산은 서버의 PyBaMM conda 환경을 서브프로세스로 호출(복사·수정 없음). CDN 없음, 외부 전송 없음.
+
+## 사용 방법
+
+![입력 화면 — ① 파라미터 세트 ② 방전 C-rate ③ 계산](docs/img/input.png)
+
+1. **성능 시뮬레이션** 탭의 **셀** 카드에서 파라미터 세트(①, 예: Chen2020 — NMC811 / 흑연-SiOx), 모델(SPM / SPMe 권장 / DFN), 주변 온도, 열 모델(등온 또는 집중)을 고릅니다.
+2. **방전 C-rate 비교**에서 C-rate 를 쉼표로 적고(②, 예: `0.2, 0.5, 1, 2`, 최대 6개) **계산**(③)을 누릅니다. CC-CV 충전·전류 프로파일도 같은 자리에서 고릅니다.
+3. 결과의 요약 표(결과 화면 ①: 용량·공칭 대비·에너지·평균 전압·시간·최고 온도·상승)와 전압-방전 용량·셀 온도·SOC 차트(②)를 봅니다. 차트마다 **SVG** 저장, 아래에서 CSV·PNG·result.json 을 받습니다.
+4. 수명은 **수명 예측** 탭(SOH 기준 80% EOL, LLI/LAM·SEI·도금), 자연어 질문은 **AI 질문** 탭, 지난 계산은 **작업·이력** 탭에서 엽니다. 긴 계산은 창을 닫아도 서버에서 계속 돕니다.
+
+## 예시
+
+포털 경유로 실제 실행한 결과입니다(2026-10-07, 작업 `20261007-064229-d694`, 약 4초).
+
+- **입력**: Chen2020 (LG M50 21700, 공칭 5 Ah) · SPMe · 집중(lumped) 열 모델 · 25°C · 방전 C-rate `0.2, 0.5, 1, 2`
+- **출력**:
+
+| C-rate | 용량 Ah | 에너지 Wh | 시간 분 | 최고 °C |
+|---|---|---|---|---|
+| 0.2C | 5.117 | 18.79 | 307 | 26.05 |
+| 0.5C | 5.072 | 18.3 | 121.7 | 29.6 |
+| 1.0C | 5.001 | 17.64 | 60.02 | 38.38 |
+| 2.0C | 4.851 | 16.38 | 29.11 | 64.97 |
+
+화면은 "2.0C 최고 64.97°C — 냉각 조건에 크게 좌우됨(열전달계수를 실제 냉각에 맞춰 조정)" 경고를 함께 보여 줍니다(열전달계수 10 W/m²K).
+
+## 설치·실행
 
 ```bash
 bash setup.sh                 # Python → PyBaMM 환경 탐색 → LLM 탐색 → selftest → http://localhost:8785
@@ -22,7 +55,7 @@ python3 selftest.py           # 실제 PyBaMM 짧은 계산 + 가짜 LLM 검증 
 | `BATTERY_TIMEOUT` | `7200` | 작업 하나 최대 초 |
 | `BATTERY_MAX_CYCLES` | `5000` | 수명 계산 최대 사이클 |
 | `WORKSPACE` | `./_workspace` | `jobs/<id>/` (job.json·status.json·result.json·partial.json·CSV·PNG·explain.json), `cache/meta.json` |
-| `LLM_API` / `LLM_BASE_URL` / `LLM_MODEL` | `ollama` / `http://localhost:11434` / `qwen3:8b` | AI 질문·해설용(없어도 계산은 됨) |
+| `LLM_API` / `LLM_BASE_URL` / `LLM_MODEL` | `ollama` / `http://localhost:11434` / `qwen3:8b` | AI 질문·해설용(없어도 계산은 됨). 포털로 띄우면 로컬 Ollama(`:11436`)의 `gemma4:31b` 가 넘어옴 |
 
 ## 구조
 - `app.py` — HTTP 서버·작업 큐(백그라운드, 진행률, 취소, 재시작 시 중단 표시)·설정 검증·LLM(질문→JSON, 해설, 숫자 검사)
@@ -68,3 +101,7 @@ python3 selftest.py           # 실제 PyBaMM 짧은 계산 + 가짜 LLM 검증 
 - 이 도구는 [agent-page-portal](https://github.com/gggg8657/agent-page-portal) 에 연결해 쓰도록 만들었습니다(단독 실행도 됨).
 
 저작권 표기·전체 목록은 `NOTICE` 를 보세요.
+
+## 라이선스
+
+MIT License — Copyright (c) 2026 DongJu Kim (gggg8657). `LICENSE` 를 보세요.
