@@ -28,7 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.dirname(os.path.abspath(__file__))
 WS = os.environ.get("WORKSPACE") or os.path.join(ROOT, "_workspace")  # 포털이 AGENT_DATA/<도구> 로 모아 줌
 PORT = int(os.environ.get("PORT", "8785"))
-HOST = os.environ.get("HOST", "0.0.0.0")
+HOST = os.environ.get("BIND") or os.environ.get("HOST", "0.0.0.0")  # 포털은 BIND=127.0.0.1 (포털을 거쳐서만)
 LLM_API = os.environ.get("LLM_API", "ollama")
 LLM_BASE = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1" if LLM_API == "openai" else "http://localhost:11434").rstrip("/")
 MODEL = os.environ.get("LLM_MODEL", "qwen3:8b")
@@ -253,15 +253,34 @@ def steps_preview(job):
 
 # ── 작업 큐 ─────────────────────────────────────────────────────────────
 JOBS_LOCK = threading.Lock()
-QUEUE = []           # 대기 중인 id
-RUNNING = {}         # id → Popen
+QUEUE = []           # 대기 중인 (사용자 폴더, id) — 계산 줄은 모두가 같이 선다
+RUNNING = {}         # (사용자 폴더, id) → Popen
 WAKE = threading.Condition(JOBS_LOCK)
+_REQ = threading.local()  # 요청·작업 스레드마다 그 사용자의 작업 폴더 (user_ws 로 정함)
+
+
+def user_ws(h):
+    """포털이 넘긴 사용자별 작업 폴더. owner(서버 주인)·헤더 없음(단독 실행) = 예전 WORKSPACE 그대로"""
+    u = (h.headers.get("X-Agent-User") or "owner").strip()
+    if u == "owner":
+        return WS
+    d = os.path.join(WS, "u", re.sub(r"[^A-Za-z0-9_.-]", "_", u)[:64] or "_")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def cur_ws():
+    return getattr(_REQ, "ws", WS)
+
+
+def key(jid):
+    return (cur_ws(), jid)
 
 
 def job_dir(jid):
     if not re.fullmatch(r"\d{8}-\d{6}-[0-9a-f]{4}", jid or ""):
         raise ValueError("잘못된 작업 id")
-    return os.path.join(WS, "jobs", jid)
+    return os.path.join(cur_ws(), "jobs", jid)
 
 
 def write_json(p, d):
@@ -308,7 +327,7 @@ def submit(job, origin="form", question=""):
           "created": now.isoformat(timespec="seconds"), "origin": origin, "question": question[:500]}
     write_json(os.path.join(d, "status.json"), st)
     with WAKE:
-        QUEUE.append(jid)
+        QUEUE.append(key(jid))
         WAKE.notify()
     return jid
 
@@ -325,7 +344,7 @@ def run_job(jid):
         set_status(jid, state="error", msg=f"워커 실행 실패: {e}")
         return
     with JOBS_LOCK:
-        RUNNING[jid] = p
+        RUNNING[key(jid)] = p
     killer = threading.Timer(TIMEOUT, lambda: _kill(p))
     killer.start()
     err = None
@@ -351,7 +370,7 @@ def run_job(jid):
         killer.cancel()
         log.close()
         with JOBS_LOCK:
-            RUNNING.pop(jid, None)
+            RUNNING.pop(key(jid), None)
     st = status_of(jid)
     el = round(time.time() - t0, 1)
     if st.get("state") == "canceled":
@@ -380,27 +399,28 @@ def scheduler():
         with WAKE:
             while not QUEUE or len(RUNNING) >= MAX_JOBS:
                 WAKE.wait(1.0)
-            jid = QUEUE.pop(0)
-            RUNNING[jid] = None  # 자리 예약
-        threading.Thread(target=_run_and_wake, args=(jid,), daemon=True).start()
+            w, jid = QUEUE.pop(0)
+            RUNNING[(w, jid)] = None  # 자리 예약
+        threading.Thread(target=_run_and_wake, args=(jid, w), daemon=True).start()
 
 
-def _run_and_wake(jid):
+def _run_and_wake(jid, w=WS):
+    _REQ.ws = w
     try:
         run_job(jid)
     except Exception as e:
         set_status(jid, state="error", msg=f"{type(e).__name__}: {e}")
     finally:
         with WAKE:
-            RUNNING.pop(jid, None)
+            RUNNING.pop(key(jid), None)
             WAKE.notify()
 
 
 def cancel(jid):
     with WAKE:
-        if jid in QUEUE:
-            QUEUE.remove(jid)
-        p = RUNNING.get(jid)
+        if key(jid) in QUEUE:
+            QUEUE.remove(key(jid))
+        p = RUNNING.get(key(jid))
     set_status(jid, state="canceled", msg="취소됨")
     if p:
         _kill(p)
@@ -415,7 +435,7 @@ def delete(jid):
 
 def list_jobs(limit=300):
     out = []
-    for d in sorted(glob.glob(os.path.join(WS, "jobs", "*")), reverse=True)[:limit]:
+    for d in sorted(glob.glob(os.path.join(cur_ws(), "jobs", "*")), reverse=True)[:limit]:
         try:
             st = json.loads(read(os.path.join(d, "status.json")))
             out.append({k: st.get(k) for k in ("id", "kind", "title", "state", "pct", "msg", "created", "elapsed", "origin", "question")})
@@ -442,7 +462,7 @@ def job_full(jid):
 
 def recover():
     """서버 재시작 전 대기·실행 중이던 작업은 중단 표시"""
-    for d in glob.glob(os.path.join(WS, "jobs", "*")):
+    for d in glob.glob(os.path.join(WS, "jobs", "*")) + glob.glob(os.path.join(WS, "u", "*", "jobs", "*")):
         try:
             st = json.loads(read(os.path.join(d, "status.json")))
             if st.get("state") in ("queued", "running"):
@@ -710,6 +730,7 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
     def do_GET(self):
+        _REQ.ws = user_ws(self)
         path = self.path.split("?")[0]
         try:
             if path == "/api/health":
@@ -724,7 +745,7 @@ class H(BaseHTTPRequestHandler):
                 return self._send(models())
             if path == "/api/jobs":
                 with JOBS_LOCK:
-                    q = list(QUEUE)
+                    q = [j for w, j in QUEUE if w == cur_ws()]
                 return self._send({"jobs": list_jobs(), "queue": q})
             m = re.fullmatch(r"/api/jobs/([\w-]+)", path)
             if m:
@@ -767,6 +788,7 @@ class H(BaseHTTPRequestHandler):
                 pass
 
     def do_POST(self):
+        _REQ.ws = user_ws(self)
         path = self.path.split("?")[0]
         try:
             req = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
