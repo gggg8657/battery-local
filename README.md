@@ -2,6 +2,8 @@
 
 PyBaMM 물리 모델로 리튬이온 셀의 방전·충전 성능과 사이클 수명(SOH·EOL·LLI/LAM)을 계산하는 로컬 웹 도구입니다. 포트 `8785`.
 
+> ⚠️ 연구·내부 시험용 프로토타입입니다(배포·상업 서비스용 아님). 제3자 구성요소의 라이선스는 THIRD_PARTY_NOTICES.md 를 확인하세요.
+
 ![방전 C-rate 비교 결과 — ① 요약 표 ② 전압·온도·SOC 차트](docs/img/result.png)
 
 ## 무엇을 하나
@@ -98,14 +100,18 @@ python3 selftest.py           # 실제 PyBaMM 짧은 계산 + 가짜 LLM 검증 
 
 ## 출처·감사 (Credits)
 
-- [PyBaMM](https://github.com/pybamm-team/PyBaMM) (BSD-3-Clause) — 전지 모델 계산. 인용: Sulzer et al., *J. Open Res. Softw.* 9(1):14 (2021). 내장 파라미터 세트(Chen2020, OKane2022 등)는 각 원 논문 값이므로 결과 발표 시 해당 논문과 PyBaMM 을 인용하세요.
+- [PyBaMM](https://github.com/pybamm-team/PyBaMM) 26.3.0 (BSD-3-Clause) — 전지 모델 계산. 인용: Sulzer et al., *J. Open Res. Softw.* 9(1):14 (2021). 내장 파라미터 세트(Chen2020, OKane2022, ORegan2022, Mohtat2020, Ecker2015, Marquis2019, Ai2020, NCA_Kim2011, Ramadass2004, Prada2013)는 PyBaMM 에 들어 있는 각 원 논문의 값이므로, 결과를 발표할 때는 해당 논문과 PyBaMM 을 인용하세요(출처: `pybamm.parameter_sets.get_docstring(<이름>)`). 열화 기본 SEI 활성화에너지는 O'Kane et al., *PCCP* 24, 7909 (2022) 의 값입니다.
 - pybammsolvers (IDAKLU, SUNDIALS 기반, BSD-3-Clause), [CasADi](https://github.com/casadi/casadi) (LGPL-3.0), NumPy·SciPy (BSD-3-Clause), Matplotlib (선택)
 - 모두 서버의 별도 conda 환경에서 서브프로세스로 호출하며 동봉하지 않습니다.
-- **LLM 실행** — OpenAI 호환 API 로 호출합니다(모델 가중치는 동봉하지 않음). 기본 배포는 [Ollama](https://github.com/ollama/ollama) (MIT) 위의 Google [Gemma](https://ai.google.dev/gemma) `gemma4:31b` — 모델 이용 조건은 Gemma 배포처 참고.
+- **LLM 실행** — OpenAI 호환 API 로 호출합니다(모델 가중치는 동봉하지 않음). 기본 배포는 [Ollama](https://github.com/ollama/ollama) (MIT) 위의 Google [Gemma 4](https://ai.google.dev/gemma) `gemma4:31b` (Apache-2.0).
 - 이 도구는 [agent-page-portal](https://github.com/gggg8657/agent-page-portal) 에 연결해 쓰도록 만들었습니다(단독 실행도 됨).
 
-저작권 표기·전체 목록은 `NOTICE` 를 보세요.
+전체 목록·라이선스·상업 이용 확인 항목은 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), 저작권 표기는 `NOTICE` 를 보세요.
 
 ## 라이선스
 
-MIT License — Copyright (c) 2026 DongJu Kim (gggg8657). `LICENSE` 를 보세요.
+MIT License — Copyright (c) 2026 DongJu Kim (gggg8657). `LICENSE` 를 보세요. 제3자 구성요소의 권리는 이 라이선스로 바뀌지 않습니다.
+
+## 만든 사람
+
+DongJu Kim (gggg8657) — 설계·구현
