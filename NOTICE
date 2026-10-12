@@ -25,5 +25,5 @@ Files authored for this package (MIT): app.py, worker.py, ui.html, selftest.py, 
 LLM (not bundled): called via an OpenAI-compatible API; default deployment is Ollama (https://github.com/ollama/ollama, MIT)
   serving Google Gemma 4 (gemma4:31b, https://ai.google.dev/gemma, Apache-2.0).
 
-This package: Copyright (c) 2026 DongJu Kim (gggg8657) <gggg8657@gmail.com>
+This package: Copyright (c) 2026 DongJu Kim (gggg8657) <dongjukim.dev@gmail.com>
 화면 하단·메타데이터의 저작자 표기는 지우거나 바꾸지 마세요.
