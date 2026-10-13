@@ -1,6 +1,6 @@
 # THIRD_PARTY_NOTICES — battery-local
 
-이 저장소의 코드(`app.py`·`worker.py`·`ui.html`·`selftest.py`·`setup.sh`)는 DongJu Kim(gggg8657)이 작성했으며 MIT 입니다. 웹 서버와 화면은 Python 표준 라이브러리와 자체 SVG 차트만 쓰고, 제3자 코드·글꼴·데이터를 동봉하지 않습니다. 계산은 서버에 이미 설치된 PyBaMM conda 환경의 python 으로 `worker.py` 를 서브프로세스로 실행합니다.
+이 저장소의 코드(`app.py`·`worker.py`·`ui.html`·`selftest.py`·`setup.sh`)는 DongJu Kim(gggg8657)이 작성했으며 PolyForm Noncommercial 1.0.0 입니다. 웹 서버와 화면은 Python 표준 라이브러리와 자체 SVG 차트만 쓰고, 제3자 코드·글꼴·데이터를 동봉하지 않습니다. 계산은 서버에 이미 설치된 PyBaMM conda 환경의 python 으로 `worker.py` 를 서브프로세스로 실행합니다.
 
 조사 기준: 2026-10-12. 실제 파일(import 문, `setup.sh`)을 보고, 라이선스는 설치된 패키지(`~/miniforge3/envs/pybamm-inv`)의 dist-info 와 원 저장소에서 확인했습니다. 버전은 이 서버의 값입니다(고정 아님).
 
