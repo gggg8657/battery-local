@@ -505,6 +505,8 @@ def llm(system, user, model=None, temperature=0.2, on_token=lambda t: None, json
     try:
         if LLM_API == "openai":
             body = {"model": model, "stream": True, "temperature": temperature, "messages": msgs}
+            if json_mode:
+                body["response_format"] = {"type": "json_object"}  # Ollama 경로의 format:"json" 과 같은 뜻
             hdr = {"Content-Type": "application/json", **({"Authorization": f"Bearer {LLM_KEY}"} if LLM_KEY else {})}
             req = urllib.request.Request(LLM_BASE + "/chat/completions", json.dumps(body).encode(), hdr)
             with urllib.request.urlopen(req, timeout=1800) as r:
