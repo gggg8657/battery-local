@@ -113,7 +113,7 @@ def meta(block=True):
         r = subprocess.run([PY, "-I", WORKER, "meta"], capture_output=True, text=True, timeout=600, env=worker_env(), cwd=ROOT,
                            preexec_fn=_nice)
         if r.returncode != 0:
-            _META["err"] = (r.stdout + r.stderr)[-500:]
+            _META["err"] = hide_paths((r.stdout + r.stderr)[-500:])
             return None
         d = json.loads(r.stdout.strip().splitlines()[-1])
         d.update(_py=PY, _worker_mtime=os.path.getmtime(WORKER))
@@ -341,7 +341,7 @@ def run_job(jid):
         p = subprocess.Popen([PY, "-I", WORKER, "run", os.path.join(d, "job.json"), d], stdout=subprocess.PIPE,
                              stderr=log, text=True, env=worker_env(), cwd=ROOT, preexec_fn=_nice)
     except Exception as e:
-        set_status(jid, state="error", msg=f"워커 실행 실패: {e}")
+        set_status(jid, state="error", msg=hide_paths(f"워커 실행 실패: {e}"))
         return
     with JOBS_LOCK:
         RUNNING[key(jid)] = p
@@ -381,7 +381,7 @@ def run_job(jid):
         set_status(jid, state="error", msg=f"시간 초과({TIMEOUT} 초) — 사이클 수를 줄이거나 SPM 을 쓰세요", elapsed=el)
     else:
         tail = read(os.path.join(d, "worker.log"))[-400:]
-        set_status(jid, state="error", msg=err or f"계산 실패 (exit {p.returncode}) {tail}", elapsed=el)
+        set_status(jid, state="error", msg=hide_paths(err or f"계산 실패 (exit {p.returncode}) {tail}"), elapsed=el)
 
 
 def _kill(p):
@@ -409,14 +409,32 @@ def _run_and_wake(jid, w=WS):
     try:
         run_job(jid)
     except Exception as e:
-        set_status(jid, state="error", msg=f"{type(e).__name__}: {e}")
+        set_status(jid, state="error", msg=hide_paths(f"{type(e).__name__}: {e}"))
     finally:
         with WAKE:
             RUNNING.pop(key(jid), None)
             WAKE.notify()
 
 
+class Conflict(Exception):
+    pass
+
+
+_ABS = re.compile(r"(?<![\w.])/(?:[\w.\-~+@]+/)+")
+
+
+def hide_paths(msg):
+    """상태 문구·오류에 섞인 서버 폴더 경로를 지우고 파일 이름만 남긴다"""
+    return _ABS.sub("", str(msg))
+
+
 def cancel(jid):
+    if status_of(jid).get("state") not in ("queued", "running"):
+        raise Conflict("이미 끝난 작업은 취소할 수 없습니다")
+    _cancel(jid)
+
+
+def _cancel(jid):
     with WAKE:
         if key(jid) in QUEUE:
             QUEUE.remove(key(jid))
@@ -429,7 +447,7 @@ def cancel(jid):
 def delete(jid):
     st = status_of(jid)
     if st.get("state") in ("queued", "running"):
-        cancel(jid)
+        _cancel(jid)
     shutil.rmtree(job_dir(jid), ignore_errors=True)
 
 
@@ -734,7 +752,7 @@ class H(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         try:
             if path == "/api/health":
-                return self._send({"ok": True, "python": PY, "pybamm": PYBAMM_VER})
+                return self._send({"ok": True, "python": bool(PY), "pybamm": PYBAMM_VER})
             if path == "/api/meta":
                 m = meta()
                 if not m:
@@ -765,7 +783,7 @@ class H(BaseHTTPRequestHandler):
         except (FileNotFoundError, ValueError):
             self._send({"error": "없음"}, code=404)
         except Exception as e:
-            self._send({"error": f"{type(e).__name__}: {e}"}, code=500)
+            self._send({"error": hide_paths(f"{type(e).__name__}: {e}")}, code=500)
 
     def _sse(self, fn):
         self.send_response(200)
@@ -783,7 +801,7 @@ class H(BaseHTTPRequestHandler):
             pass
         except Exception as e:
             try:
-                emit({"error": str(e) if isinstance(e, (ValueError, RuntimeError)) else f"{type(e).__name__}: {e}"})
+                emit({"error": hide_paths(str(e) if isinstance(e, (ValueError, RuntimeError)) else f"{type(e).__name__}: {e}")})
             except OSError:
                 pass
 
@@ -793,6 +811,8 @@ class H(BaseHTTPRequestHandler):
         try:
             req = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         except ValueError:
+            return self._send({"error": "잘못된 요청"}, code=400)
+        if not isinstance(req, dict):
             return self._send({"error": "잘못된 요청"}, code=400)
         try:
             if path == "/api/jobs":
@@ -820,12 +840,14 @@ class H(BaseHTTPRequestHandler):
             if m:
                 return self._sse(lambda emit: explain(m.group(1), req.get("model"), emit))
             return self._send({"error": "없는 경로"}, code=404)
+        except Conflict as e:
+            return self._send({"error": str(e)}, code=409)
         except ValueError as e:
             return self._send({"error": str(e)}, code=400)
         except FileNotFoundError:
             return self._send({"error": "없음"}, code=404)
         except Exception as e:
-            return self._send({"error": f"{type(e).__name__}: {e}"}, code=500)
+            return self._send({"error": hide_paths(f"{type(e).__name__}: {e}")}, code=500)
 
 
 def start_background():

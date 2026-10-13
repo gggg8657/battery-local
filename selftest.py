@@ -119,6 +119,14 @@ try:
     time.sleep(3)
     app.cancel(jc)
     assert wait(jc, 30)["state"] == "canceled"
+    for done_id in (jc, ids["life"]):  # 끝난 작업은 다시 취소 안 됨(409) — 상태도 그대로
+        before = app.status_of(done_id)["state"]
+        try:
+            app.cancel(done_id); raise AssertionError("끝난 작업 취소가 통과함")
+        except app.Conflict:
+            pass
+        assert app.status_of(done_id)["state"] == before
+    assert app.hide_paths("x /home/a/b/worker.py y 1C/2") == "x worker.py y 1C/2"
 
     # 4) 자연어 → 설정 → 해설(가짜 LLM) · 숫자 검사
     app.llm = fake_plan
