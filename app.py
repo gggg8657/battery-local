@@ -25,6 +25,8 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import portal_jobs
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 WS = os.environ.get("WORKSPACE") or os.path.join(ROOT, "_workspace")  # 포털이 AGENT_DATA/<도구> 로 모아 줌
 PORT = int(os.environ.get("PORT", "8785"))
@@ -262,6 +264,7 @@ _REQ = threading.local()  # 요청·작업 스레드마다 그 사용자의 작�
 def user_ws(h):
     """포털이 넘긴 사용자별 작업 폴더. owner(서버 주인)·헤더 없음(단독 실행) = 예전 WORKSPACE 그대로"""
     u = (h.headers.get("X-Agent-User") or "owner").strip()
+    _REQ.user = u  # 포털 작업 알림 받을 사람 — status.json 에 같이 적어 둠
     if u == "owner":
         return WS
     d = os.path.join(WS, "u", re.sub(r"[^A-Za-z0-9_.-]", "_", u)[:64] or "_")
@@ -305,6 +308,19 @@ def set_status(jid, **kw):
     return st
 
 
+def notify_job(st, d=None):
+    """포털 작업 알림(🔔) — PORTAL_JOBS_* 없으면 아무 일도 안 함(False). 예외·대기 없음. 링크 /?job=<id> 는 ui.html 이 열어 줌.
+    워커 프로세스는 진행만 알리고 상태는 이 프로세스가 바꾸므로 여기서만 부른다"""
+    try:
+        w = os.path.dirname(os.path.dirname(d)) if d else cur_ws()
+        user = st.get("user") or ("owner" if os.path.abspath(w) == os.path.abspath(WS) else os.path.basename(w))  # 예전 작업은 폴더 이름으로
+        state = {"error": "failed"}.get(st.get("state"), st.get("state"))
+        return portal_jobs.notify(user, state, id=st["id"], title=st.get("title") or "", link="/?job=" + st["id"],
+                                  message=hide_paths(st.get("msg") or ""), progress=st.get("pct") if state == "running" else None)
+    except Exception:
+        return False
+
+
 def title_of(job):
     s = job["set"]
     if job["kind"] == "rate":
@@ -324,30 +340,31 @@ def submit(job, origin="form", question=""):
     os.makedirs(d)
     write_json(os.path.join(d, "job.json"), job)
     st = {"id": jid, "kind": job["kind"], "title": title_of(job), "state": "queued", "pct": 0, "msg": "대기 중",
-          "created": now.isoformat(timespec="seconds"), "origin": origin, "question": question[:500]}
+          "created": now.isoformat(timespec="seconds"), "origin": origin, "question": question[:500], "user": getattr(_REQ, "user", "owner")}
     write_json(os.path.join(d, "status.json"), st)
     with WAKE:
         QUEUE.append(key(jid))
         WAKE.notify()
+    notify_job(st)
     return jid
 
 
 def run_job(jid):
     d = job_dir(jid)
     t0 = time.time()
-    set_status(jid, state="running", started=datetime.datetime.now().isoformat(timespec="seconds"), msg="시작")
+    notify_job(set_status(jid, state="running", started=datetime.datetime.now().isoformat(timespec="seconds"), msg="시작"))
     log = open(os.path.join(d, "worker.log"), "w", encoding="utf-8")
     try:
         p = subprocess.Popen([PY, "-I", WORKER, "run", os.path.join(d, "job.json"), d], stdout=subprocess.PIPE,
                              stderr=log, text=True, env=worker_env(), cwd=ROOT, preexec_fn=_nice)
     except Exception as e:
-        set_status(jid, state="error", msg=hide_paths(f"워커 실행 실패: {e}"))
+        notify_job(set_status(jid, state="error", msg=hide_paths(f"워커 실행 실패: {e}")))
         return
     with JOBS_LOCK:
         RUNNING[key(jid)] = p
     killer = threading.Timer(TIMEOUT, lambda: _kill(p))
     killer.start()
-    err = None
+    err, sent = None, 0  # sent: 마지막으로 알린 진행률(10% 단위로만 알림)
     try:
         for line in p.stdout:
             if not line.startswith("@@ "):
@@ -364,7 +381,10 @@ def run_job(jid):
                 kw["pct"] = round(ev["pct"], 1)
             if ev.get("stage") == "partial":
                 kw["partial"] = True
-            set_status(jid, **kw)
+            st = set_status(jid, **kw)
+            if st.get("state") == "running" and kw.get("pct", 0) >= sent + 10:
+                sent = kw["pct"] // 10 * 10
+                notify_job(st)
         p.wait()
     finally:
         killer.cancel()
@@ -376,12 +396,13 @@ def run_job(jid):
     if st.get("state") == "canceled":
         return
     if p.returncode == 0 and os.path.exists(os.path.join(d, "result.json")):
-        set_status(jid, state="done", pct=100, msg=f"완료 ({el:g} 초)", elapsed=el)
+        st = set_status(jid, state="done", pct=100, msg=f"완료 ({el:g} 초)", elapsed=el)
     elif time.time() - t0 >= TIMEOUT - 1:
-        set_status(jid, state="error", msg=f"시간 초과({TIMEOUT} 초) — 사이클 수를 줄이거나 SPM 을 쓰세요", elapsed=el)
+        st = set_status(jid, state="error", msg=f"시간 초과({TIMEOUT} 초) — 사이클 수를 줄이거나 SPM 을 쓰세요", elapsed=el)
     else:
         tail = read(os.path.join(d, "worker.log"))[-400:]
-        set_status(jid, state="error", msg=hide_paths(err or f"계산 실패 (exit {p.returncode}) {tail}"), elapsed=el)
+        st = set_status(jid, state="error", msg=hide_paths(err or f"계산 실패 (exit {p.returncode}) {tail}"), elapsed=el)
+    notify_job(st)
 
 
 def _kill(p):
@@ -409,7 +430,7 @@ def _run_and_wake(jid, w=WS):
     try:
         run_job(jid)
     except Exception as e:
-        set_status(jid, state="error", msg=hide_paths(f"{type(e).__name__}: {e}"))
+        notify_job(set_status(jid, state="error", msg=hide_paths(f"{type(e).__name__}: {e}")))
     finally:
         with WAKE:
             RUNNING.pop(key(jid), None)
@@ -439,7 +460,7 @@ def _cancel(jid):
         if key(jid) in QUEUE:
             QUEUE.remove(key(jid))
         p = RUNNING.get(key(jid))
-    set_status(jid, state="canceled", msg="취소됨")
+    notify_job(set_status(jid, state="canceled", msg="취소됨"))
     if p:
         _kill(p)
 
@@ -486,6 +507,7 @@ def recover():
             if st.get("state") in ("queued", "running"):
                 st.update(state="error", msg="서버 재시작으로 중단됨 — 다시 실행하세요")
                 write_json(os.path.join(d, "status.json"), st)
+                notify_job(st, d)
         except Exception:
             pass
 

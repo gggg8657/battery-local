@@ -2,11 +2,13 @@
 """자가검증 (실제 PyBaMM 짧은 계산 + 가짜 LLM): 설정 검증·실험 문자열 → 작업 큐(rate·charge·drive·life 짧게) → 결과 파싱(EOL·LLI/LAM·
 외삽 표시·CSV·PNG) → 자연어 설정(가짜 LLM) → 해설 숫자 검사 → HTTP(화면·메타·파일 다운로드·저작자 표기).
 WORKSPACE 는 임시 폴더로 바꿔 실데이터 폴더에 흔적을 남기지 않는다. 수십 초 걸린다.   python3 selftest.py"""
-import json, os, shutil, sys, tempfile, threading, time, urllib.request
+import http.server, json, os, shutil, sys, tempfile, threading, time, urllib.request
 
 TMP = tempfile.mkdtemp(prefix="battery-selftest-")
 os.environ["WORKSPACE"] = TMP
 os.environ.setdefault("BATTERY_JOBS", "2")
+for _k in ("PORTAL_JOBS_URL", "PORTAL_JOBS_TOKEN", "PORTAL_JOBS_TOOL"):  # 포털 작업 알림은 꺼진 채로 시작
+    os.environ.pop(_k, None)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import app  # noqa: E402
 
@@ -80,6 +82,8 @@ try:
     sts = {k: wait(v) for k, v in ids.items()}
     for k, s in sts.items():
         assert s["state"] == "done", (k, s)
+    import portal_jobs
+    assert portal_jobs.notify("owner", "done", id="x") is False and app.notify_job(sts["rate"]) is False  # 알림 꺼짐 → 아무 일도 안 함
 
     r = app.job_full(ids["rate"])["result"]
     a, b = [x["metrics"] for x in r["runs"]]
@@ -114,11 +118,37 @@ try:
     assert cu["steps"][0] == "Discharge at 1C until 2.8V" and cu["rows"][0]["soh_dis"] is not None
     assert any("×400" in n for n in cu["notes"]) and any("38 kJ/mol" in n for n in cu["notes"]), cu["notes"]
 
-    # 3) 취소
-    jc = app.submit({"kind": "life", "set": "OKane2022", "model": "DFN", "max_cycles": 500})
-    time.sleep(3)
-    app.cancel(jc)
-    assert wait(jc, 30)["state"] == "canceled"
+    # 3) 취소 — 포털 작업 알림을 가짜 서버로 받아 상태 순서·내용 확인
+    got = []
+
+    class P(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            got.append((self.headers.get("X-Portal-Jobs-Token"), json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
+            self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers()
+    ps = http.server.ThreadingHTTPServer(("127.0.0.1", 0), P)
+    threading.Thread(target=ps.serve_forever, daemon=True).start()
+    os.environ.update(PORTAL_JOBS_URL=f"http://127.0.0.1:{ps.server_address[1]}/api/internal/jobs", PORTAL_JOBS_TOKEN="tok",
+                      PORTAL_JOBS_TOOL="battery-local")
+    try:
+        jn = app.submit({"kind": "rate", "set": "Chen2020", "model": "SPM", "c_rates": [1]})
+        jc = app.submit({"kind": "life", "set": "OKane2022", "model": "DFN", "max_cycles": 500})
+        time.sleep(3)
+        app.cancel(jc)
+        assert wait(jc, 30)["state"] == "canceled" and wait(jn)["state"] == "done"
+        assert portal_jobs.flush()
+    finally:
+        for _k in ("PORTAL_JOBS_URL", "PORTAL_JOBS_TOKEN", "PORTAL_JOBS_TOOL"):
+            os.environ.pop(_k, None)
+        ps.shutdown()
+    seq = lambda jid: [q["status"] for t, q in got if q["id"] == jid and q["status"] != "running"]
+    assert seq(jn) == ["queued", "done"] and seq(jc) == ["queued", "canceled"], got
+    assert [q["status"] for t, q in got if q["id"] == jn][1] == "running", got
+    pn = next(q for t, q in got if q["id"] == jn and q["status"] == "done")
+    assert all(t == "tok" for t, _ in got) and pn["tool"] == "battery-local" and pn["user"] == "owner" and pn["link"] == "/?job=" + jn, pn
+    assert pn["title"].startswith("방전 C-rate 비교") and pn["message"].startswith("완료"), pn
     for done_id in (jc, ids["life"]):  # 끝난 작업은 다시 취소 안 됨(409) — 상태도 그대로
         before = app.status_of(done_id)["state"]
         try:
@@ -151,7 +181,7 @@ try:
     with urllib.request.urlopen(f"{base}/api/jobs/{ids['life']}/file/plot.png") as rr:
         assert rr.read(4) == b"\x89PNG"
     jl = json.load(urllib.request.urlopen(base + "/api/jobs"))
-    assert len(jl["jobs"]) == 6
+    assert len(jl["jobs"]) == 7
     req = urllib.request.Request(base + "/api/jobs", json.dumps({"kind": "rate", "set": "X"}).encode(), {"Content-Type": "application/json"})
     try:
         urllib.request.urlopen(req)

@@ -61,6 +61,8 @@ python3 selftest.py           # 실제 PyBaMM 짧은 계산 + 가짜 LLM 검증 
 | `BIND` | (`HOST`, 기본 0.0.0.0) | 포털이 `127.0.0.1` 을 줌 — 포털을 거쳐서만 접근 |
 
 포털 접속자 기준으로 작업·결과는 사용자별로 따로 저장합니다(`WORKSPACE/u/<사용자>/`, 포털이 넘기는 `X-Agent-User` 헤더). 서버 주인(owner)·단독 실행은 예전처럼 `WORKSPACE` 바로 아래를 쓰므로 예전 기록이 그대로 보입니다. 포털이 `BIND=127.0.0.1` 을 주면 포털을 거쳐서만 열립니다. 계산 줄(동시 2개)은 모두가 같이 서고, `cache/meta.json`(세트 정보)은 공유입니다.
+
+**포털 작업 알림** — 포털이 `PORTAL_JOBS_URL`·`PORTAL_JOBS_TOKEN`·`PORTAL_JOBS_TOOL` 을 넘기면 작업 상태(대기·실행·완료·실패·취소, 실행 중엔 10% 단위 진행률)를 포털 🔔 알림 센터로 보냅니다(`portal_jobs.py`, 없으면 아무 일도 안 함). 알림 링크는 `/?job=<작업 id>` — 화면이 그 작업 결과를 바로 엽니다.
 | `LLM_API` / `LLM_BASE_URL` / `LLM_MODEL` | `ollama` / `http://localhost:11434` / `qwen3:8b` | AI 질문·해설용(없어도 계산은 됨). 포털로 띄우면 로컬 Ollama(`:11436`)의 `gemma4:31b` 가 넘어옴 |
 
 ## 구조
