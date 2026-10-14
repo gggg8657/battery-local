@@ -24,6 +24,7 @@ import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import portal_auth  # 포털 서명 확인 관문·오류 문장 정리(원본 agent-page-portal/sdk/portal_auth.py)
 
 import portal_jobs
 
@@ -895,4 +896,4 @@ if __name__ == "__main__":
     start_background()
     print(f"battery local → http://localhost:{PORT}  (python={PY} pybamm={PYBAMM_VER} jobs={MAX_JOBS}×{THREADS}thr "
           f"llm={LLM_API} {LLM_BASE} {MODEL}, workspace={WS})  {_SIG}", flush=True)
-    ThreadingHTTPServer((HOST, PORT), __import__("portal_auth").install(H, "battery-local")).serve_forever()
+    ThreadingHTTPServer((HOST, PORT), portal_auth.install(H, "battery-local")).serve_forever()
