@@ -30,7 +30,7 @@ import portal_jobs
 ROOT = os.path.dirname(os.path.abspath(__file__))
 WS = os.environ.get("WORKSPACE") or os.path.join(ROOT, "_workspace")  # 포털이 AGENT_DATA/<도구> 로 모아 줌
 PORT = int(os.environ.get("PORT", "8785"))
-HOST = os.environ.get("BIND") or os.environ.get("HOST", "0.0.0.0")  # 포털은 BIND=127.0.0.1 (포털을 거쳐서만)
+HOST = os.environ.get("BIND") or os.environ.get("HOST", "127.0.0.1")  # 포털은 BIND=127.0.0.1 (포털을 거쳐서만)
 LLM_API = os.environ.get("LLM_API", "ollama")
 LLM_BASE = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1" if LLM_API == "openai" else "http://localhost:11434").rstrip("/")
 MODEL = os.environ.get("LLM_MODEL", "qwen3:8b")
@@ -895,4 +895,4 @@ if __name__ == "__main__":
     start_background()
     print(f"battery local → http://localhost:{PORT}  (python={PY} pybamm={PYBAMM_VER} jobs={MAX_JOBS}×{THREADS}thr "
           f"llm={LLM_API} {LLM_BASE} {MODEL}, workspace={WS})  {_SIG}", flush=True)
-    ThreadingHTTPServer((HOST, PORT), H).serve_forever()
+    ThreadingHTTPServer((HOST, PORT), __import__("portal_auth").install(H, "battery-local")).serve_forever()
